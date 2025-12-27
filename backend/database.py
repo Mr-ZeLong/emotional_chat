@@ -3,10 +3,17 @@
 数据库配置和模型定义
 """
 import os
+import logging
+from typing import Any
 from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Text, DateTime, Float, Boolean
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from datetime import datetime
+from sqlalchemy.orm import declarative_base, sessionmaker
+from datetime import datetime, timezone
+
+# 配置日志
+logger = logging.getLogger(__name__)
+
+# 调试模式配置
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 # 数据库配置
 # 从环境变量获取数据库URL，如果没有设置则从各个组件构建
@@ -20,37 +27,44 @@ _default_db_url = (
 DATABASE_URL = os.getenv("DATABASE_URL", _default_db_url)
 
 # 创建数据库引擎
-engine = create_engine(DATABASE_URL, echo=True)
+engine = create_engine(
+    DATABASE_URL,
+    echo=DEBUG,
+    pool_pre_ping=True,  # 验证连接有效性
+    pool_recycle=3600,   # 1小时后回收连接(MySSL超时处理)
+    pool_size=5,         # 基础连接池大小
+    max_overflow=10      # 额外连接数
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-Base = declarative_base()
+Base: Any = declarative_base()
 
 class User(Base):
     """用户表"""
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String(100), unique=True, index=True)
     username = Column(String(100))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     is_active = Column(Boolean, default=True)
 
 class ChatSession(Base):
     """聊天会话表"""
     __tablename__ = "chat_sessions"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String(100), unique=True, index=True)
     user_id = Column(String(100), index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     is_active = Column(Boolean, default=True)
 
 class ChatMessage(Base):
     """聊天消息表"""
     __tablename__ = "chat_messages"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String(100), index=True)
     user_id = Column(String(100), index=True)
@@ -58,12 +72,12 @@ class ChatMessage(Base):
     content = Column(Text)
     emotion = Column(String(50))  # 情感标签
     emotion_intensity = Column(Float)  # 情感强度
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class EmotionAnalysis(Base):
     """情感分析记录表"""
     __tablename__ = "emotion_analysis"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String(100), index=True)
     user_id = Column(String(100), index=True)
@@ -72,36 +86,36 @@ class EmotionAnalysis(Base):
     intensity = Column(Float)
     keywords = Column(Text)  # JSON格式存储关键词
     suggestions = Column(Text)  # JSON格式存储建议
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class Knowledge(Base):
     """知识库表"""
     __tablename__ = "knowledge"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200))
     content = Column(Text)
     category = Column(String(100))
     tags = Column(Text)  # JSON格式存储标签
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     is_active = Column(Boolean, default=True)
 
 class SystemLog(Base):
     """系统日志表"""
     __tablename__ = "system_logs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     level = Column(String(20))  # INFO, WARNING, ERROR
     message = Column(Text)
     session_id = Column(String(100), index=True)
     user_id = Column(String(100), index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class UserFeedback(Base):
     """用户反馈表"""
     __tablename__ = "user_feedback"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String(100), index=True)
     user_id = Column(String(100), index=True)
@@ -111,33 +125,33 @@ class UserFeedback(Base):
     comment = Column(Text)  # 用户的详细评论
     user_message = Column(Text)  # 用户消息内容（快照）
     bot_response = Column(Text)  # 机器人回复内容（快照）
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_resolved = Column(Boolean, default=False)  # 是否已处理优化
 
 class ResponseEvaluation(Base):
     """回应评估表 - 存储LLM自动评估结果"""
     __tablename__ = "response_evaluations"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String(100), index=True)
     user_id = Column(String(100), index=True)
     message_id = Column(BigInteger, index=True)  # 关联到chat_messages.id
-    
+
     # 评估对象
     user_message = Column(Text)  # 用户消息（快照）
     bot_response = Column(Text)  # 机器人回复（快照）
     user_emotion = Column(String(50))  # 用户情感
     emotion_intensity = Column(Float)  # 情感强度
-    
+
     # 评估维度分数 (1-5)
     empathy_score = Column(Float)  # 共情程度
     naturalness_score = Column(Float)  # 自然度
     safety_score = Column(Float)  # 安全性
-    
+
     # 总分和平均分
     total_score = Column(Float)  # 总分 (三个维度之和)
     average_score = Column(Float)  # 平均分
-    
+
     # 评估详情 (JSON格式)
     empathy_reasoning = Column(Text)  # 共情评价理由
     naturalness_reasoning = Column(Text)  # 自然度评价理由
@@ -146,80 +160,80 @@ class ResponseEvaluation(Base):
     strengths = Column(Text)  # 优点 (JSON数组)
     weaknesses = Column(Text)  # 缺点 (JSON数组)
     improvement_suggestions = Column(Text)  # 改进建议 (JSON数组)
-    
+
     # 元数据
     evaluation_model = Column(String(100))  # 使用的评估模型
     prompt_version = Column(String(50))  # Prompt版本（可选，用于A/B测试）
     is_human_verified = Column(Boolean, default=False)  # 是否经过人工验证
     human_rating_diff = Column(Float)  # 人工评分与AI评分的差异（可选）
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 class UserProfileDB(Base):
     """用户画像表 - 存储用户的基本信息和特征"""
     __tablename__ = "user_profiles"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String(100), unique=True, index=True)
-    
+
     # 基本信息
     name = Column(String(100))
     age = Column(Integer)
     gender = Column(String(20))
-    
+
     # 用户特征 (JSON格式存储)
     personality_traits = Column(Text)  # 性格特征列表
     interests = Column(Text)  # 兴趣爱好列表
     concerns = Column(Text)  # 长期关注的问题列表
-    
+
     # 沟通偏好
     communication_style = Column(String(50), default="默认")  # 沟通风格偏好
     emotional_baseline = Column(String(50), default="稳定")  # 情绪基线
-    
+
     # 统计信息
     total_sessions = Column(Integer, default=0)  # 总会话数
     total_messages = Column(Integer, default=0)  # 总消息数
     avg_emotion_intensity = Column(Float)  # 平均情绪强度
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 class MemoryItem(Base):
     """记忆条目表 - 存储结构化的用户记忆（配合向量数据库使用）"""
     __tablename__ = "memory_items"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     memory_id = Column(String(100), unique=True, index=True)  # 对应向量数据库中的ID
     user_id = Column(String(100), index=True)
     session_id = Column(String(100), index=True)
-    
+
     # 记忆内容
     content = Column(Text)  # 原始内容
     summary = Column(Text)  # 摘要
     memory_type = Column(String(50))  # event, relationship, commitment, preference, concern
-    
+
     # 关联信息
     emotion = Column(String(50))  # 相关情绪
     emotion_intensity = Column(Float)  # 情绪强度
     importance = Column(Float)  # 重要性评分 (0-1)
-    
+
     # 提取信息
     extraction_method = Column(String(50))  # rule_based, llm_based
     keywords = Column(Text)  # 关键词 (JSON数组)
-    
+
     # 状态
     is_active = Column(Boolean, default=True)  # 是否活跃（可以设置为False来软删除）
     access_count = Column(Integer, default=0)  # 被检索次数
     last_accessed = Column(DateTime)  # 最后访问时间
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 class ABTestExperiment(Base):
     """A/B测试实验表"""
     __tablename__ = "ab_test_experiments"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     experiment_id = Column(String(100), unique=True, index=True)  # 实验唯一标识
     name = Column(String(200))  # 实验名称
@@ -227,47 +241,47 @@ class ABTestExperiment(Base):
     groups = Column(Text)  # 实验组列表（JSON格式），如 ["A", "B"]
     weights = Column(Text)  # 各组权重（JSON格式），如 [0.5, 0.5]
     start_date = Column(DateTime)  # 开始时间
-    end_date = Column(DateTime, nullable=True)  # 结束时间
+    end_date = Column(DateTime)  # 结束时间
     enabled = Column(Boolean, default=True)  # 是否启用
     extra_metadata = Column(Text)  # 额外元数据（JSON格式）
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 class ABTestEvent(Base):
     """A/B测试事件表"""
     __tablename__ = "ab_test_events"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String(100), index=True)
     experiment_id = Column(String(100), index=True)
     group = Column(String(50), index=True)  # 实验组（A/B/C等）
     event_type = Column(String(50), index=True)  # 事件类型
     event_data = Column(Text)  # 事件数据（JSON格式）
-    session_id = Column(String(100), index=True, nullable=True)
-    
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    session_id = Column(String(100), index=True)
+
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class ABTestGroupAssignment(Base):
     """A/B测试分组分配表"""
     __tablename__ = "ab_test_group_assignments"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String(100), index=True)
     experiment_id = Column(String(100), index=True)
     group = Column(String(50), index=True)  # 分配的组
-    
-    assigned_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    assigned_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 class UserPersonalization(Base):
     """用户个性化配置表 - 存储用户的AI伙伴定制设置"""
     __tablename__ = "user_personalizations"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String(100), unique=True, index=True)
-    
+
     # 角色层：AI身份与人格
     role = Column(String(100), default="温暖倾听者")  # 角色类型
     role_name = Column(String(100), default="心语")  # 角色名称
@@ -275,7 +289,7 @@ class UserPersonalization(Base):
     personality = Column(String(100), default="温暖耐心")  # 性格特征
     core_principles = Column(Text)  # 核心原则 (JSON数组)
     forbidden_behaviors = Column(Text)  # 禁忌行为 (JSON数组)
-    
+
     # 表达层：风格与语气
     tone = Column(String(50), default="温和")  # 语气: 温和/活泼/正式/幽默
     style = Column(String(50), default="简洁")  # 风格: 简洁/详细/诗意/直接
@@ -285,28 +299,28 @@ class UserPersonalization(Base):
     humor_level = Column(Float, default=0.3)  # 幽默程度 (0-1)
     response_length = Column(String(20), default="medium")  # 回复长度: short/medium/long
     use_emoji = Column(Boolean, default=False)  # 是否使用emoji
-    
+
     # 记忆层：长期偏好
     preferred_topics = Column(Text)  # 偏好话题 (JSON数组)
     avoided_topics = Column(Text)  # 避免话题 (JSON数组)
     communication_preferences = Column(Text)  # 沟通偏好 (JSON对象)
-    
+
     # 高级设置
     learning_mode = Column(Boolean, default=True)  # 是否启用学习模式
     safety_level = Column(String(20), default="standard")  # 安全级别: strict/standard/relaxed
     context_window = Column(Integer, default=10)  # 上下文窗口大小
-    
+
     # 情境化角色（多角色支持）
     situational_roles = Column(Text)  # 情境角色配置 (JSON对象)
     active_role = Column(String(50), default="default")  # 当前激活的角色
-    
+
     # 统计信息
     total_interactions = Column(Integer, default=0)  # 总交互次数
     positive_feedbacks = Column(Integer, default=0)  # 正向反馈次数
     config_version = Column(Integer, default=1)  # 配置版本号
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 # 创建所有表
 def create_tables():
@@ -332,12 +346,20 @@ def get_db():
 class DatabaseManager:
     def __init__(self):
         self.db = SessionLocal()
-    
+
     def __enter__(self):
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.db.close()
+        """退出上下文管理器 - 处理回滚和关闭连接"""
+        try:
+            if exc_type is not None:
+                # 发生异常 - 回滚事务
+                self.db.rollback()
+                logger.error(f"Database error: {exc_val}", exc_info=True)
+            # 注意: 不自动提交，让各个方法自己处理提交逻辑
+        finally:
+            self.db.close()
     
     def save_message(self, session_id, user_id, role, content, emotion=None, emotion_intensity=None):
         """保存聊天消息"""

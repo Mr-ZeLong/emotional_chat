@@ -4,9 +4,10 @@
 整合用户画像、长期记忆、对话历史，生成完整的上下文
 """
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, cast
 from datetime import datetime
 import json
+import logging
 from backend.memory_manager import MemoryManager
 from backend.database import DatabaseManager
 
@@ -19,9 +20,9 @@ class UserProfile:
         self.name = None
         self.age = None
         self.gender = None
-        self.personality_traits = []  # 性格特征
-        self.interests = []  # 兴趣爱好
-        self.concerns = []  # 长期关注的问题
+        self.personality_traits: List[str] = []  # 性格特征
+        self.interests: List[str] = []  # 兴趣爱好
+        self.concerns: List[str] = []  # 长期关注的问题
         self.communication_style = "默认"  # 沟通风格偏好
         self.emotional_baseline = "稳定"  # 情绪基线
         self.created_at = datetime.now()
@@ -94,7 +95,7 @@ class ContextAssembler:
     def __init__(self):
         """初始化上下文组装器"""
         self.memory_manager = MemoryManager()
-        self.user_profiles = {}  # 缓存用户画像
+        self.user_profiles: Dict[str, UserProfile] = {}  # 缓存用户画像
     
     def assemble_context(self, user_id: str, session_id: str, 
                         current_message: str,
@@ -230,22 +231,22 @@ class ContextAssembler:
         # 优先检索高情绪强度的事件
         if intensity and intensity >= 7.0:
             # 情绪强烈时，检索更多相关记忆
-            return self.memory_manager.retrieve_memories(
+            return cast(List[Dict[str, Any]], self.memory_manager.retrieve_memories(
                 user_id=user_id,
                 query=query,
                 n_results=5,
                 days_limit=14,  # 扩大时间范围
                 min_importance=0.4
-            )
+            ))
         else:
             # 正常检索
-            return self.memory_manager.retrieve_memories(
+            return cast(List[Dict[str, Any]], self.memory_manager.retrieve_memories(
                 user_id=user_id,
                 query=query,
                 n_results=3,
                 days_limit=7,
                 min_importance=0.5
-            )
+            ))
     
     def _process_chat_history(self, history: List[Dict[str, str]], 
                              max_turns: int = 5) -> List[Dict[str, str]]:

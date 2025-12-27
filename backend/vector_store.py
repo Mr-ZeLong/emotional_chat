@@ -7,7 +7,7 @@ from chromadb.config import Settings
 import uuid
 import os
 import shutil
-from typing import List, Dict, Any, Optional
+from typing import Dict, Optional, Union
 from config import Config
 import logging
 
@@ -82,7 +82,7 @@ class VectorStore:
                 logger.info(f"已删除数据库目录，请重新启动服务: {db_path}")
             raise
     
-    def add_conversation(self, session_id: str, message: str, response: str, emotion: str = None):
+    def add_conversation(self, session_id: str, message: str, response: str, emotion: Union[str, None] = None):
         """存储对话记录"""
         conversation_text = f"用户: {message}\n助手: {response}"
         if emotion:
@@ -100,7 +100,7 @@ class VectorStore:
             ids=[doc_id]
         )
     
-    def search_similar_conversations(self, query: str, session_id: str = None, n_results: int = 5):
+    def search_similar_conversations(self, query: str, session_id: Union[str, None] = None, n_results: int = 5):
         """搜索相似对话"""
         results = self.conversation_collection.query(
             query_texts=[query],
@@ -109,7 +109,7 @@ class VectorStore:
         )
         return results
     
-    def add_knowledge(self, text: str, category: str = "general", metadata: Dict = None):
+    def add_knowledge(self, text: str, category: str = "general", metadata: Union[Dict, None] = None):
         """添加知识库内容"""
         doc_id = uuid.uuid4().hex
         self.knowledge_collection.add(
@@ -121,7 +121,7 @@ class VectorStore:
             ids=[doc_id]
         )
     
-    def search_knowledge(self, query: str, category: str = None, n_results: int = 3):
+    def search_knowledge(self, query: str, category: Union[str, None] = None, n_results: int = 3):
         """搜索知识库"""
         where_clause = {"category": category} if category else None
         results = self.knowledge_collection.query(
@@ -143,7 +143,7 @@ class VectorStore:
             ids=[doc_id]
         )
     
-    def search_emotion_patterns(self, query: str, emotion: str = None, n_results: int = 3):
+    def search_emotion_patterns(self, query: str, emotion: Union[str, None] = None, n_results: int = 3):
         """搜索情感模式"""
         where_clause = {"emotion": emotion} if emotion else None
         results = self.emotion_collection.query(

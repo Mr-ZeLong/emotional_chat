@@ -21,11 +21,23 @@ Response Generator Core Module
 import yaml
 import logging
 import random
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, TypedDict
 from datetime import datetime
 
 from .dynamic_prompt_builder import DynamicPromptBuilder
 from backend.utils.sentiment_classifier import SentimentClassifier
+
+
+class GenerationResult(TypedDict):
+    """生成结果字典类型"""
+    response: str
+    generation_method: str
+    is_valid: bool
+    warnings: List[str]
+    metadata: Dict[str, Any]
+
+
+DEFAULT_STRATEGY_FILE = "/home/workSpace/emotional_chat/backend/config/emotion_strategy.yaml"
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +102,7 @@ class ResponseGenerator:
                          conversation_history: Optional[List[Dict]] = None,
                          retrieved_memories: Optional[List[Dict]] = None,
                          user_profile: Optional[Dict] = None,
-                         metadata: Optional[Dict] = None) -> Dict[str, Any]:
+                         metadata: Optional[Dict] = None) -> GenerationResult:
         """
         生成AI回复（主入口）
         
@@ -114,7 +126,7 @@ class ResponseGenerator:
         """
         self.stats["total_generations"] += 1
         
-        result = {
+        result: GenerationResult = {
             "response": "",
             "generation_method": "",
             "is_valid": True,
@@ -131,7 +143,8 @@ class ResponseGenerator:
             response = self._handle_crisis(user_input, user_emotion, metadata)
             result["response"] = response
             result["generation_method"] = "rule_based_crisis"
-            result["metadata"]["is_crisis"] = True
+            metadata = result["metadata"]
+            metadata["is_crisis"] = True
             self.stats["rule_based"] += 1
             logger.warning(f"危机干预触发 [user={user_id}]: {user_emotion}")
             return result
@@ -175,7 +188,8 @@ class ResponseGenerator:
                 if not is_valid:
                     # 一致性检查失败，使用降级策略
                     logger.warning(f"一致性检查失败: {warnings}")
-                    result["warnings"] = warnings
+                    result_warnings = result["warnings"]
+                    result_warnings.extend(warnings)
                     self.stats["consistency_failures"] += 1
                     
                     # 降级为预设回复
@@ -250,7 +264,7 @@ class ResponseGenerator:
         """
         # 核心处理逻辑（精简版）
         crisis_strategy = self.emotion_strategy.get("high_risk_depression", {})
-        crisis_response = crisis_strategy.get("fallback", "")
+        crisis_response: str = crisis_strategy.get("fallback", "")
         
         if crisis_response:
             return crisis_response
@@ -419,7 +433,7 @@ class ResponseGenerator:
         """
         # 从策略中获取fallback
         strategy = self.emotion_strategy.get(user_emotion, {})
-        fallback = strategy.get("fallback", "")
+        fallback: str = strategy.get("fallback", "")
         
         if fallback:
             return fallback
@@ -440,7 +454,7 @@ class ResponseGenerator:
         
         return default_fallbacks.get(user_emotion, "我在这里倾听。请继续说吧。")
     
-    def _load_cached_responses(self) -> Dict[str, List[str]]:
+    def _load_cached_responses(self) -> Dict[str, Any]:
         """
         加载缓存的固定回复
         
@@ -448,7 +462,7 @@ class ResponseGenerator:
             缓存回复字典
         """
         global_settings = self.emotion_strategy.get("global_settings", {})
-        cached = global_settings.get("cached_responses", {})
+        cached: Dict[str, Any] = global_settings.get("cached_responses", {})
         
         # 确保每个场景都有列表
         for key in ["greeting", "goodbye", "thanks"]:
@@ -499,7 +513,7 @@ def create_response_generator(llm_client,
         ResponseGenerator实例
     """
     if strategy_file is None:
-        strategy_file = "/home/workSpace/emotional_chat/backend/config/emotion_strategy.yaml"
+        strategy_file = DEFAULT_STRATEGY_FILE
     
     return ResponseGenerator(llm_client, strategy_file, **kwargs)
 
@@ -527,7 +541,7 @@ if __name__ == "__main__":
     generator = ResponseGenerator(mock_client)
     
     # 测试用例
-    test_cases = [
+    test_cases: List[Dict[str, Any]] = [
         {
             "user_input": "我今天被领导批评了，觉得自己一无是处",
             "user_emotion": "sad",
@@ -548,14 +562,17 @@ if __name__ == "__main__":
     print("\n===== 响应生成测试 =====\n")
     for i, test in enumerate(test_cases, 1):
         print(f"测试 {i}:")
-        print(f"用户输入: {test['user_input']}")
-        print(f"情绪: {test['user_emotion']} (强度: {test['emotion_intensity']})")
+        user_input = test['user_input']
+        user_emotion = test['user_emotion']
+        emotion_intensity = test['emotion_intensity']
+        print(f"用户输入: {user_input}")
+        print(f"情绪: {user_emotion} (强度: {emotion_intensity})")
         
         result = generator.generate_response(
-            user_input=test['user_input'],
-            user_emotion=test['user_emotion'],
+            user_input=user_input,
+            user_emotion=user_emotion,
             user_id="test_user",
-            emotion_intensity=test['emotion_intensity']
+            emotion_intensity=emotion_intensity
         )
         
         print(f"生成方法: {result['generation_method']}")

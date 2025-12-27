@@ -6,10 +6,10 @@
 """
 
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
-from backend.database import DatabaseManager
+from backend.database import DatabaseManager, UserFeedback
 
 
 class FeedbackAnalyzer:
@@ -52,7 +52,7 @@ class FeedbackAnalyzer:
         rating_distribution = Counter(f.rating for f in feedbacks)
         
         # 识别问题严重程度
-        problem_severity = {
+        problem_severity: Dict[str, List[UserFeedback]] = {
             'critical': [],  # 严重问题（评分1-2）
             'moderate': [],  # 中等问题（评分3）
             'minor': []      # 轻微问题（评分4-5但有负面反馈）
@@ -150,7 +150,7 @@ class FeedbackAnalyzer:
         
         # 识别缺乏共情的模式
         empathy_keywords = ['冷漠', '机械', '没有感情', '不理解', '敷衍', '套话']
-        pattern_matches = defaultdict(int)
+        pattern_matches: Dict[str, int] = defaultdict(int)
         
         for f in feedbacks:
             if f.comment:
@@ -187,7 +187,7 @@ class FeedbackAnalyzer:
         
         # 识别越界建议的模式
         overstepping_keywords = ['应该', '必须', '建议你', '你应该', '最好', '直接建议', '命令', '指导']
-        pattern_matches = defaultdict(int)
+        pattern_matches: Dict[str, int] = defaultdict(int)
         
         for f in feedbacks:
             if f.bot_response:
@@ -287,7 +287,7 @@ class FeedbackAnalyzer:
         
         return recommendations
     
-    def generate_detailed_report(self, output_file: str = None) -> str:
+    def generate_detailed_report(self, output_file: Optional[str] = None) -> str:
         """
         生成详细的分析报告
         

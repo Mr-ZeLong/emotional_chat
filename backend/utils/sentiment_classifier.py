@@ -13,9 +13,26 @@ Sentiment Consistency Checker
 
 import re
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TypedDict, Union
 
 logger = logging.getLogger(__name__)
+
+
+class TestCase(TypedDict):
+    """测试用例类型"""
+    user_emotion: str
+    ai_response: str
+    expected: bool
+
+
+class ComprehensiveCheckResult(TypedDict):
+    """comprehensive_check方法的返回类型"""
+    is_valid: bool
+    emotion_consistent: bool
+    has_forbidden: bool
+    tone_valid: bool
+    warnings: List[str]
+    details: Dict[str, Union[str, List[str]]]
 
 
 class SentimentClassifier:
@@ -157,7 +174,7 @@ class SentimentClassifier:
         
         # 1. 关键词匹配
         for emotion, data in self.EMOTION_KEYWORDS.items():
-            score = 0
+            score = 0.0
             
             # 关键词匹配
             for keyword in data["keywords"]:
@@ -181,7 +198,7 @@ class SentimentClassifier:
         if not emotion_scores:
             return "neutral", 0.3
         
-        dominant_emotion = max(emotion_scores, key=emotion_scores.get)
+        dominant_emotion = max(emotion_scores, key=lambda k: emotion_scores[k])
         max_score = emotion_scores[dominant_emotion]
         
         # 3. 计算置信度（归一化）
@@ -325,7 +342,7 @@ class SentimentClassifier:
                            ai_response: str, 
                            user_emotion: str,
                            expected_tone: Optional[str] = None,
-                           strict_mode: bool = False) -> Dict:
+                           strict_mode: bool = False) -> ComprehensiveCheckResult:
         """
         综合检查AI回复的情感一致性
         
@@ -344,7 +361,7 @@ class SentimentClassifier:
             - warnings: 警告信息列表
             - details: 详细信息
         """
-        result = {
+        result: ComprehensiveCheckResult = {
             "is_valid": True,
             "emotion_consistent": True,
             "has_forbidden": False,
@@ -358,29 +375,35 @@ class SentimentClassifier:
             ai_response, user_emotion, strict_mode
         )
         result["emotion_consistent"] = emotion_ok
-        result["details"]["emotion_check"] = emotion_reason
+        details = result["details"]
+        details["emotion_check"] = emotion_reason
         
         if not emotion_ok:
             result["is_valid"] = False
-            result["warnings"].append(emotion_reason)
+            warnings = result["warnings"]
+            warnings.append(emotion_reason)
         
         # 2. 禁用短语检查
         has_forbidden, forbidden_list = self.check_forbidden_phrases(ai_response, user_emotion)
         result["has_forbidden"] = has_forbidden
-        result["details"]["forbidden_phrases"] = forbidden_list
+        details = result["details"]
+        details["forbidden_phrases"] = forbidden_list
         
         if has_forbidden:
             result["is_valid"] = False
-            result["warnings"].append(f"包含禁用短语: {', '.join(forbidden_list)}")
+            warnings = result["warnings"]
+            warnings.append(f"包含禁用短语: {', '.join(forbidden_list)}")
         
         # 3. 语气检查（如果指定）
         if expected_tone:
             tone_ok, tone_reason = self.validate_response_tone(ai_response, expected_tone)
             result["tone_valid"] = tone_ok
-            result["details"]["tone_check"] = tone_reason
+            details = result["details"]
+            details["tone_check"] = tone_reason
             
             if not tone_ok:
-                result["warnings"].append(tone_reason)
+                warnings = result["warnings"]
+                warnings.append(tone_reason)
                 # 语气问题不强制失败，只是警告
         
         # 4. 检测AI身份暴露
@@ -388,7 +411,8 @@ class SentimentClassifier:
         for keyword in identity_keywords:
             if keyword in ai_response:
                 result["is_valid"] = False
-                result["warnings"].append(f"暴露AI身份: '{keyword}'")
+                warnings = result["warnings"]
+                warnings.append(f"暴露AI身份: '{keyword}'")
                 break
         
         return result
@@ -448,7 +472,7 @@ if __name__ == "__main__":
     classifier = SentimentClassifier()
     
     # 测试用例
-    test_cases = [
+    test_cases: List[TestCase] = [
         {
             "user_emotion": "sad",
             "ai_response": "我能感受到你现在的低落。但请相信，你的存在本身就有价值。我在这里，愿意听你说更多。💙",
@@ -473,14 +497,15 @@ if __name__ == "__main__":
     
     print("\n===== 情感一致性测试 =====\n")
     for i, test in enumerate(test_cases, 1):
+        test_case: TestCase = test  # 显式类型注解
         result = classifier.comprehensive_check(
-            test["ai_response"], 
-            test["user_emotion"]
+            test_case["ai_response"], 
+            test_case["user_emotion"]
         )
         
-        status = "✓" if result["is_valid"] == test["expected"] else "✗"
-        print(f"{status} 测试 {i}: 用户情绪={test['user_emotion']}")
-        print(f"   回复: {test['ai_response'][:50]}...")
+        status = "✓" if result["is_valid"] == test_case["expected"] else "✗"
+        print(f"{status} 测试 {i}: 用户情绪={test_case['user_emotion']}")
+        print(f"   回复: {test_case['ai_response'][:50]}...")
         print(f"   结果: {'通过' if result['is_valid'] else '不通过'}")
         if result["warnings"]:
             print(f"   警告: {', '.join(result['warnings'])}")
