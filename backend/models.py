@@ -185,6 +185,7 @@ class PersonalizationConfig(BaseModel):
     situational_roles: Optional[Dict[str, Any]] = None
     active_role: str = "default"
 
+
 class PersonalizationUpdateRequest(BaseModel):
     """个性化配置更新请求"""
     role: Optional[str] = None
